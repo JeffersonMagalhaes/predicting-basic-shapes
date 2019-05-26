@@ -1,0 +1,315 @@
+---
+title: "Using machine learning to predict basic shapes"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+  #html_document: 
+    toc: true
+    number_sections: true
+    df_print: kable
+---
+
+# Introduction
+
+This report is part of the final course in the HarvardX Data Science Professional Certificate, Capstone, and it is available in GitHb: https://github.com/JeffersonMagalhaes/edx_basic_shapes. The aim of the project is applying machine learning techniques that go beyond standard linear regression. Therefore, we will create a model to classify images. 
+
+The dataset chosen is from https://www.kaggle.com/cactus3/basicshapes, and is a collection of 100 triangles, 100 squares and 100 circles. Each drawing is a png image 28x28 px. They are in 3 folders labeled squares, circles and triangles. 
+
+We will be creating our models using the tools we have learned throughout the courses. Thus, we will use R language to write the code, and its libraries, which will help us to complete the task. We will wrangle data, visualize it, and create a machine learning model. 
+
+First, we will analyse our dataset. Then we will create a train and a test set. After that, we will create a model that will be measured by its overall accuracy.
+
+#Analysis
+##Libraries
+The first step is to define what libraries we are going to use. We will need tidyverse package to manipulate the dataset, caret package to develop our machine learning model, and OpenImageR to deal with the images. 
+
+```{r setup, include=TRUE, warning=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+##########################################
+#Loading packages
+##########################################
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(OpenImageR)) install.packages("OpenImageR", repos = "http://cran.us.r-project.org")
+if(!require(matrixStats)) install.packages("matrixStats", repos = "http://cran.us.r-project.org")
+if(!require(stringi)) install.packages("stringi", repos = "http://cran.us.r-project.org")
+if(!require(stringr)) install.packages("stringr", repos = "http://cran.us.r-project.org")
+
+```
+
+##Dataset
+Since our dataset is a set o .png files, we need to convert it to a R object. The function readImage from OpenImageR reads a image a return a three dimensional matrix. 
+
+```{r,include=TRUE, warning=FALSE}
+#shapes
+shapes = c("circles","squares","triangles")
+
+####read images to create a dataset of images
+fig_dataset = lapply(shapes, function(x){
+  file_names = paste(x,"\\",dir(x),sep="")
+  read_files = lapply(file_names, function(y){
+    fig = readImage(y)
+    shape = x
+    return(list(img = fig,shape = shape))
+  })
+})
+
+class(fig_dataset)
+
+###dataset is list of 3 list, one for each shape. 
+###It is better to have a unique list for all shapes, so will use unlist 
+fig_dataset = unlist(fig_dataset, recursive = F) 
+
+class(fig_dataset)
+
+```
+
+We can see that the length of our list is equal to 300 (100 triangles, 100 squares and 100 circles).
+
+```{r,include=TRUE, warning=FALSE}
+length(fig_dataset)
+```
+
+Each is a list with a img object that represents our images, and shape field is the shape of the images. 
+
+```{r,include=TRUE, warning=FALSE}
+names(fig_dataset[[1]])
+```
+
+We can check that object of img is a array
+
+```{r,include=TRUE, warning=FALSE}
+class(fig_dataset[[1]]$img)
+```
+
+Each dimension of the array represents a matrix of RGB scale
+
+```{r,include=TRUE, warning=FALSE}
+class(fig_dataset[[1]]$img[,,1])
+```
+
+##Shapes
+The function image can be used to see some of the images. 
+
+```{r, echo=FALSE}
+
+for(i in 1:3){
+  ###circle 
+  print(fig_dataset[[i]]$shape)
+  image(fig_dataset[[i]]$img[,,1])
+  ###square
+  print(fig_dataset[[100+i]]$shape)
+  image(fig_dataset[[100+i]]$img[,,1])
+  ###triangle
+  print(fig_dataset[[200+i]]$shape)
+  image(fig_dataset[[200+i]]$img[,,1])
+}
+
+```
+
+#Methods
+##Train, and test sets
+To create a machine will be needed to divide the dataset in a train and test sets. We will use 80% of the dataset to train our models (240 images), and other images will be used to test the models.
+
+##Gray scale
+Because the RGB scale is not important to your problem, we are going to use the fucntion rgb_2gray from OpenImageR to transform our images to gray scale.
+
+##Data Augmentation
+We will use data augmentation to increase our train set, since our it will have just 240 images, which is less than to total number of features ($28*28 = 784$). 
+
+###Flip
+Fliping images doesn't change their shapes.
+
+Original image
+```{r, echo=FALSE}
+image(rgb_2gray(fig_dataset[[210]]$img))
+```
+
+Flipped image
+```{r, echo=FALSE}
+image(rgb_2gray(flipImage(fig_dataset[[210]]$img, mode = "vertical")))
+```
+
+
+##Rotate
+Rotating images also doesn´t chage their shapes. 
+
+Original image
+```{r, echo=FALSE}
+image(rgb_2gray(fig_dataset[[210]]$img))
+```
+
+Rotated image
+```{r, echo=FALSE}
+image(rgb_2gray(rotateFixed(fig_dataset[[210]]$img, 90)))
+```
+
+##Histogram of Oriented Gradients (HOG)
+We will use Histogram of Oriented Gradients. This technique  decomposes an image into small squared cells, computes an histogram of oriented gradients in each cell, normalizes the result using a block-wise pattern, and return a descriptor for each cell. This is be completed by HOG fucntion from OpenImageR.
+
+##Models
+
+We will train various models. Basically, we will use tree models, Support-vector machine (SVM) models, neural networking and some statistical models.
+
+```{r,include=TRUE, warning=FALSE}
+models <- c("lda",  "naive_bayes",  "svmLinear", "qda", 
+            "knn", "kknn", "loclda",
+            "rf", "wsrf", 
+            "avNNet", "mlp", "monmlp","gbm",
+            "svmRadial", "svmRadialCost", "svmRadialSigma")
+
+```
+
+##Ensemble
+
+Once we have trainned models, we will ensemble those that performe better.
+
+#Results
+##Train, and test sets
+
+```{r,include=TRUE, warning=FALSE}
+####because our dataset is a list and not a data.frame,
+####we will first create a vector with the same size of our list 
+#### Then we will use it as a index to split our data
+
+vec_img = 1:300
+set.seed(1)
+test_index = createDataPartition(vec_img,times = 1, p = 0.2, list = F)
+
+test_set = fig_dataset[test_index]
+train_set = fig_dataset[-test_index]
+
+```
+
+###Train set
+We will create a function to increase the train set by data augmentation and transform it by HOG. 
+
+```{r,include=TRUE, warning=FALSE}
+###função para transformar em escala de cinza, augmentation e HOG (obtém features da figura)
+GRAY_AUG_HOG = function(picture){
+  pict = rgb_2gray(picture)
+  img_flip_vert = HOG(flipImage(pict, mode = "vertical"))
+  img_flip_hor = HOG(flipImage(pict, mode = "horizontal"))
+  img_rot_90 = HOG(rotateFixed(pict, 90))
+  img_rot_180 = HOG(rotateFixed(pict, 180))
+  img_rot_270 = HOG(rotateFixed(pict, 270))
+  img = HOG(pict)
+  df = rbind(img,img_flip_vert,img_flip_hor,img_rot_90,img_rot_180,img_rot_270)
+  return(df)
+}
+
+
+```
+
+Then, we will use the function to reach our goal.
+
+```{r,include=TRUE, warning=FALSE}
+####Train dataset increased by Augmentation and transformed by HOG
+train_df = lapply(train_set, function(x){
+  fig = GRAY_AUG_HOG(x$img)
+  data.frame(fig)%>% mutate(shape = x$shape)
+})
+train_df = plyr::ldply(train_df)
+
+```
+
+###Test set
+
+We will also transform our test set using HOG function. 
+
+```{r,include=TRUE, warning=FALSE}
+test_df = lapply(test_set, function(x){
+  fig = HOG(x$img)
+  data.frame(t(fig),shape = x$shape)
+})
+test_df = plyr::ldply(test_df)
+```
+
+
+##Trainning the models
+
+We can use train fucntion from caret package to train and tuning our models. 
+```{r,results="hide", warning=FALSE}
+fit = lapply(models, function(x){
+  print(x)
+  fit = train_df %>% train(shape~., data = ., method = x)
+})
+```
+
+Then, we can see the overall accuracy of the model.
+
+```{r,include=TRUE, warning=FALSE}
+###accuracy
+acc = sapply(fit, function(x){
+  max(x$results$Accuracy, na.rm = T)
+})
+names(acc) = models
+acc
+```
+
+##Emsemble
+Lastly, we can ensemble those models that performed better. We will keep those that their overall accucary on the train set was above $0.85$. 
+
+```{r,include=TRUE, warning=FALSE}
+model_acc =data.frame(model = models, acc = acc)
+model_ok = model_acc %>% filter(acc > 0.85)
+model_ok
+
+pred = predict(fit[acc>0.85])
+
+
+pred = data.frame(matrix(unlist(pred), nrow = nrow(train_df)))
+names(pred) = model_ok$model
+
+pred_cl = rowSums(pred == "circles")
+pred_sq = rowSums(pred == "squares")
+pred_tr = rowSums(pred == "triangles")
+
+preds = data.frame(pred, circle = pred_cl, square = pred_sq, triangle = pred_tr) %>%
+  mutate(pred = ifelse(circle>square & circle>triangle,"circles",
+                       ifelse(square>circle & square>triangle,"squares", 
+                              ifelse(triangle>circle &triangle>square, "triangles", 
+                                     as.character(wsrf)))))
+
+confusionMatrix(as.factor(preds$pred), as.factor(train_df$shape))
+```
+
+##Overall Accuracy on the test set
+
+Once we have created our model, we can test it on the test set. 
+
+```{r,include=TRUE, warning=FALSE}
+pred_test = predict(fit[acc>0.85], newdata = test_df)
+pred_test = data.frame(matrix(unlist(pred_test), nrow = nrow(test_df)))
+names(pred_test) = model_ok$model
+
+pred_cl_test = rowSums(pred_test == "circles")
+pred_sq_test = rowSums(pred_test == "squares")
+pred_tr_test = rowSums(pred_test == "triangles")
+
+preds_test = data.frame(pred_test, circle = pred_cl_test, square = pred_sq_test, triangle = pred_tr_test) %>%
+  mutate(pred = ifelse(circle>square & circle>triangle,"circles",
+                       ifelse(square>circle & square>triangle,"squares", 
+                              ifelse(triangle>circle &triangle>square, "triangles", 
+                                     as.character(wsrf)))))
+
+```
+
+We can see that the overall accuracy is $0.9167$. 
+
+```{r,include=TRUE, warning=FALSE}
+CMpred = confusionMatrix(as.factor(preds_test$pred), as.factor(test_df$shape))
+CMpred$overall[[1]]
+```
+
+
+#Conclusion
+
+In this project, we have created a model to predict basic shapes. We have used various models, such as loclda, and svmRadialSigma, and the final model is a combination of those that performed better on the train set. 
+The final overall accurracy is $0.9167$. Since it is above $0.90$, we consider that we have reached our goal. 
+Although we have end with a good model, we recommend increase the dataset for future projects. This also helps to create the learning curve, each determines how the model is improving.  
+
+
