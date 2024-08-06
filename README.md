@@ -30,13 +30,13 @@ The dataset consists of images, each containing one of three basic shapes: trian
 ## Methodology
 
 1. **Data Preprocessing**: Images were resized and normalized.
-2. **Feature Extraction**: Key features from the images were extracted using techniques such as edge detection and contour analysis.
-3. **Model Building**: Several machine learning models were trained and evaluated to identify the best-performing model.
-4. **Evaluation**: The models were evaluated using accuracy, precision, recall, and F1 score.
+2. **Data Augmentation**: We will use data augmentation to increase our train set, since our it will have just 240 images, which is less than to total number of features.
+3. **Model Building**: Several machine learning models were trained and evaluated, and then they were used to create an enssemble model.
+4. **Evaluation**: The models were evaluated using accuracy.
 
 ## Results
 
-The final model achieved an accuracy of X% in predicting the shapes. Detailed results and analysis are available in the [Results](results.md) section.
+The final model achieved an accuracy of 91.67% in predicting the shapes. Detailed results and analysis are available in the [Results](results.md) section.
 
 ## Conclusion
 
